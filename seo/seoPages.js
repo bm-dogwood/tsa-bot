@@ -19,7 +19,7 @@
  */
 
 // ─── Shared schema helpers ────────────────────────────────────────────────────
-
+"use client";
 const SITE = {
   name: "TSA.BOT",
   url: "https://tsa.bot",
