@@ -3,11 +3,32 @@ import xml2js from "xml2js";
 import { fetchWithTimeout } from "@/lib/fetcher";
 
 export async function GET() {
-  const xml = await fetchWithTimeout("https://www.tsa.gov/news/releases/rss");
+  try {
+    // ✅ Correct TSA RSS feed (NOT HTML page)
+    const url = "https://www.tsa.gov/rss.xml";
 
-  const parsed = await xml2js.parseStringPromise(xml, {
-    explicitArray: false,
-  });
+    const xml = await fetchWithTimeout(url);
 
-  return NextResponse.json(parsed);
+    const parsed = await xml2js.parseStringPromise(xml, {
+      explicitArray: false,
+      trim: true,
+      normalizeTags: true,
+    });
+
+    return NextResponse.json({
+      success: true,
+      source: url,
+      data: parsed,
+    });
+  } catch (err) {
+    console.error("TSA API Error:", err);
+
+    return NextResponse.json(
+      {
+        success: false,
+        error: err.message,
+      },
+      { status: 500 }
+    );
+  }
 }

@@ -56,7 +56,7 @@ const Workflow = () => {
             How It Works
           </span>
 
-          <h2 className="text-3xl md:text-4xl font-bold mb-4">
+          <h2 className="text-3xl md:text-4xl text-gray-600 font-bold mb-4">
             Automated Screening Workflow
           </h2>
 
@@ -106,7 +106,9 @@ const Workflow = () => {
                       </div>
                     </div>
 
-                    <h3 className="text-lg font-semibold mb-2">{step.title}</h3>
+                    <h3 className="text-lg text-gray-600 font-semibold mb-2">
+                      {step.title}
+                    </h3>
 
                     <p className="text-gray-600 text-sm leading-relaxed">
                       {step.description}
@@ -115,9 +117,7 @@ const Workflow = () => {
 
                   {/* Arrow */}
                   {index < steps.length - 1 && (
-                    <div className="hidden lg:block absolute -right-4 top-24 z-10">
-                      <ArrowRight className="w-6 h-6 text-yellow-500" />
-                    </div>
+                    <div className="hidden lg:block absolute -right-4 top-24 z-10"></div>
                   )}
                 </motion.div>
               ))}
@@ -140,7 +140,9 @@ const Workflow = () => {
                 <div className="w-10 h-10 rounded-lg bg-gray-200 flex items-center justify-center">
                   <AlertTriangle className="w-5 h-5 text-gray-600" />
                 </div>
-                <h4 className="font-semibold">Manual Screening</h4>
+                <h4 className="font-semibold text-gray-600">
+                  Manual Screening
+                </h4>
               </div>
 
               <ul className="space-y-3 text-sm text-gray-600">
@@ -158,7 +160,9 @@ const Workflow = () => {
                   <Brain className="w-5 h-5 text-yellow-600" />
                 </div>
 
-                <h4 className="font-semibold">AI-Powered Screening</h4>
+                <h4 className="font-semibold text-gray-600">
+                  AI-Powered Screening
+                </h4>
 
                 <span className="ml-auto px-3 py-1 rounded-full bg-yellow-500 text-black text-xs font-semibold">
                   Recommended

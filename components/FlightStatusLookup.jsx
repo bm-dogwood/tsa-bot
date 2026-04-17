@@ -38,6 +38,12 @@ const STATUS_MAP = {
     border: "rgba(46,213,115,0.2)",
     dot: "#2ed573",
   },
+  "En Route": {
+    color: "#38b6ff",
+    bg: "rgba(56,182,255,0.1)",
+    border: "rgba(56,182,255,0.2)",
+    dot: "#38b6ff",
+  },
   Delayed: {
     color: "#ffa502",
     bg: "rgba(255,165,2,0.1)",
@@ -68,18 +74,45 @@ const STATUS_MAP = {
     border: "rgba(253,121,168,0.2)",
     dot: "#fd79a8",
   },
+  Scheduled: {
+    color: "#1e90ff",
+    bg: "rgba(30,144,255,0.1)",
+    border: "rgba(30,144,255,0.2)",
+    dot: "#1e90ff",
+  },
 };
 
 function getStatusTheme(status = "") {
+  if (!status) return STATUS_MAP["Scheduled"];
   for (const [k, v] of Object.entries(STATUS_MAP)) {
     if (status.toLowerCase().includes(k.toLowerCase())) return v;
   }
-  return {
-    color: "rgba(255,255,255,0.4)",
-    bg: "rgba(255,255,255,0.04)",
-    border: "rgba(255,255,255,0.1)",
-    dot: "rgba(255,255,255,0.4)",
-  };
+  return STATUS_MAP["Scheduled"];
+}
+
+function formatTime(isoString) {
+  if (!isoString) return null;
+  try {
+    const date = new Date(isoString);
+    return date.toLocaleTimeString("en-US", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+      timeZone: "UTC",
+    });
+  } catch {
+    return null;
+  }
+}
+
+function formatDelay(minutes) {
+  if (!minutes || minutes <= 0) return null;
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  if (hours > 0) {
+    return `${hours}h ${mins}m`;
+  }
+  return `${mins}m`;
 }
 
 function FlightProgressBar({ pct = 0 }) {
@@ -99,7 +132,7 @@ function FlightProgressBar({ pct = 0 }) {
           left: 0,
           top: 0,
           height: "100%",
-          width: `${Math.min(pct, 100)}%`,
+          width: `${Math.min(pct || 0, 100)}%`,
           background: "#38b6ff",
           borderRadius: 1,
           transition: "width 0.6s ease",
@@ -127,7 +160,47 @@ function FlightProgressBar({ pct = 0 }) {
 
 function FlightCard({ flight, index }) {
   const theme = getStatusTheme(flight.status);
-  const pct = flight.progressPercent ?? 0;
+  const pct = flight.progress_percent || 0;
+
+  // Get flight identifier
+  const flightId =
+    flight.ident_iata || flight.ident || flight.registration || "N/A";
+  const airline = flight.operator_iata || flight.operator || "";
+  const aircraft =
+    flight.aircraft_type ||
+    (flight.registration ? `REG: ${flight.registration}` : null);
+
+  // Get origin/destination codes (prefer IATA codes)
+  const originCode = flight.origin?.code_iata || flight.origin?.code || "???";
+  const destCode =
+    flight.destination?.code_iata || flight.destination?.code || "???";
+  const originName = flight.origin?.name || flight.origin?.city || "";
+  const destName = flight.destination?.name || flight.destination?.city || "";
+
+  // Times
+  const scheduledTime = formatTime(
+    flight.scheduled_out || flight.scheduled_off
+  );
+  const estimatedTime = formatTime(
+    flight.estimated_out || flight.estimated_off
+  );
+  const actualTime = formatTime(flight.actual_out || flight.actual_off);
+
+  const scheduledArrival = formatTime(
+    flight.scheduled_in || flight.scheduled_on
+  );
+  const estimatedArrival = formatTime(
+    flight.estimated_in || flight.estimated_on
+  );
+
+  // Delay info
+  const delayMinutes = flight.departure_delay || flight.arrival_delay || 0;
+  const delayText = formatDelay(delayMinutes);
+  const isDelayed =
+    flight.status?.toLowerCase().includes("delay") || delayMinutes > 0;
+
+  // Flight type badge
+  const flightType = flight.type === "General_Aviation" ? "GA" : "AIRLINE";
 
   return (
     <div
@@ -142,7 +215,7 @@ function FlightCard({ flight, index }) {
     >
       <style>{`@keyframes flt-card-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}`}</style>
 
-      {/* Top row: flight # + status */}
+      {/* Top row: flight # + type + status */}
       <div
         style={{
           display: "flex",
@@ -161,9 +234,9 @@ function FlightCard({ flight, index }) {
               letterSpacing: "0.04em",
             }}
           >
-            {flight.flightNumber ?? flight.ident}
+            {flightId}
           </span>
-          {flight.airline && (
+          {airline && (
             <span
               style={{
                 fontSize: 12,
@@ -171,9 +244,25 @@ function FlightCard({ flight, index }) {
                 fontWeight: 500,
               }}
             >
-              {flight.airline}
+              {airline}
             </span>
           )}
+          <span
+            style={{
+              fontSize: 10,
+              padding: "2px 6px",
+              borderRadius: 4,
+              background:
+                flightType === "GA"
+                  ? "rgba(162,155,254,0.15)"
+                  : "rgba(255,255,255,0.06)",
+              color: flightType === "GA" ? "#a29bfe" : "rgba(255,255,255,0.5)",
+              fontWeight: 600,
+              letterSpacing: "0.05em",
+            }}
+          >
+            {flightType}
+          </span>
         </div>
         <div
           style={{
@@ -203,7 +292,7 @@ function FlightCard({ flight, index }) {
               color: theme.color,
             }}
           >
-            {flight.status ?? "UNKNOWN"}
+            {flight.status ?? "SCHEDULED"}
           </span>
         </div>
       </div>
@@ -218,7 +307,7 @@ function FlightCard({ flight, index }) {
         }}
       >
         {/* Origin */}
-        <div style={{ textAlign: "center", minWidth: 56 }}>
+        <div style={{ textAlign: "center", minWidth: 70 }}>
           <div
             style={{
               fontFamily: "monospace",
@@ -229,22 +318,38 @@ function FlightCard({ flight, index }) {
               lineHeight: 1,
             }}
           >
-            {flight.origin}
+            {originCode}
           </div>
-          {flight.departureTime && (
+          <div
+            style={{
+              fontSize: 10,
+              color: "rgba(255,255,255,0.35)",
+              marginTop: 3,
+              maxWidth: 70,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+            title={originName}
+          >
+            {originName}
+          </div>
+          {scheduledTime && (
             <div
               style={{
-                fontSize: 11,
-                color: "rgba(255,255,255,0.4)",
-                marginTop: 3,
+                fontSize: 12,
+                color: "rgba(255,255,255,0.6)",
+                marginTop: 4,
+                fontWeight: 600,
               }}
             >
-              {flight.departureTime}
-            </div>
-          )}
-          {flight.departureActual && (
-            <div style={{ fontSize: 10, color: theme.color, marginTop: 1 }}>
-              Act: {flight.departureActual}
+              {actualTime ? (
+                <span style={{ color: theme.color }}>OUT {actualTime}</span>
+              ) : estimatedTime && estimatedTime !== scheduledTime ? (
+                <span style={{ color: "#ffa502" }}>EST {estimatedTime}</span>
+              ) : (
+                <span>SCH {scheduledTime}</span>
+              )}
             </div>
           )}
         </div>
@@ -279,23 +384,35 @@ function FlightCard({ flight, index }) {
               />
             </div>
           )}
-          {flight.aircraft && (
+          {aircraft && (
             <div
               style={{
                 textAlign: "center",
                 fontSize: 10,
-                color: "rgba(255,255,255,0.2)",
+                color: "rgba(255,255,255,0.25)",
                 marginTop: 4,
                 fontFamily: "monospace",
               }}
             >
-              {flight.aircraft}
+              {aircraft}
+            </div>
+          )}
+          {flight.route_distance && (
+            <div
+              style={{
+                textAlign: "center",
+                fontSize: 9,
+                color: "rgba(255,255,255,0.2)",
+                marginTop: 2,
+              }}
+            >
+              {flight.route_distance} NM
             </div>
           )}
         </div>
 
         {/* Destination */}
-        <div style={{ textAlign: "center", minWidth: 56 }}>
+        <div style={{ textAlign: "center", minWidth: 70 }}>
           <div
             style={{
               fontFamily: "monospace",
@@ -306,38 +423,52 @@ function FlightCard({ flight, index }) {
               lineHeight: 1,
             }}
           >
-            {flight.destination}
+            {destCode}
           </div>
-          {flight.arrivalTime && (
+          <div
+            style={{
+              fontSize: 10,
+              color: "rgba(255,255,255,0.35)",
+              marginTop: 3,
+              maxWidth: 70,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+            title={destName}
+          >
+            {destName}
+          </div>
+          {scheduledArrival && (
             <div
               style={{
-                fontSize: 11,
-                color: "rgba(255,255,255,0.4)",
-                marginTop: 3,
+                fontSize: 12,
+                color: "rgba(255,255,255,0.6)",
+                marginTop: 4,
+                fontWeight: 600,
               }}
             >
-              {flight.arrivalTime}
-            </div>
-          )}
-          {flight.arrivalActual && (
-            <div style={{ fontSize: 10, color: theme.color, marginTop: 1 }}>
-              Act: {flight.arrivalActual}
+              {estimatedArrival && estimatedArrival !== scheduledArrival ? (
+                <span style={{ color: "#ffa502" }}>EST {estimatedArrival}</span>
+              ) : (
+                <span>SCH {scheduledArrival}</span>
+              )}
             </div>
           )}
         </div>
       </div>
 
-      {/* Delay + Gate row */}
-      {(flight.delay || flight.gate || flight.terminal) && (
+      {/* Delay + Gate + Terminal row */}
+      {(isDelayed || flight.gate_origin || flight.terminal_origin) && (
         <div
           style={{
             display: "flex",
             gap: 8,
-            marginTop: 12,
+            marginTop: 14,
             flexWrap: "wrap",
           }}
         >
-          {flight.delay && (
+          {isDelayed && delayText && (
             <div
               style={{
                 display: "flex",
@@ -363,16 +494,10 @@ function FlightCard({ flight, index }) {
                 <circle cx="12" cy="12" r="10" />
                 <polyline points="12 6 12 12 16 14" />
               </svg>
-              {flight.delay} delay
-              {flight.delayReason && (
-                <span style={{ opacity: 0.7, fontWeight: 400 }}>
-                  {" "}
-                  · {flight.delayReason}
-                </span>
-              )}
+              {delayText} delay
             </div>
           )}
-          {flight.gate && (
+          {flight.gate_origin && (
             <div
               style={{
                 padding: "5px 10px",
@@ -385,10 +510,23 @@ function FlightCard({ flight, index }) {
                 fontFamily: "monospace",
               }}
             >
-              GATE {flight.gate}
-              {flight.terminal && (
-                <span style={{ opacity: 0.6 }}> · TERM {flight.terminal}</span>
-              )}
+              GATE {flight.gate_origin}
+            </div>
+          )}
+          {flight.terminal_origin && (
+            <div
+              style={{
+                padding: "5px 10px",
+                borderRadius: 6,
+                background: "rgba(255,255,255,0.05)",
+                border: "1px solid rgba(255,255,255,0.09)",
+                fontSize: 11,
+                color: "rgba(255,255,255,0.5)",
+                fontWeight: 600,
+                fontFamily: "monospace",
+              }}
+            >
+              TERM {flight.terminal_origin}
             </div>
           )}
         </div>
@@ -398,10 +536,7 @@ function FlightCard({ flight, index }) {
 }
 
 export default function FlightStatusLookup() {
-  const [mode, setMode] = useState("flight"); // "flight" | "route"
-  const [flightNum, setFlightNum] = useState("");
   const [origin, setOrigin] = useState("");
-  const [dest, setDest] = useState("");
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -409,41 +544,33 @@ export default function FlightStatusLookup() {
 
   const handleSearch = async (e) => {
     e?.preventDefault();
+
     setLoading(true);
     setError(null);
-    setSearched(true);
     setResults(null);
+    setSearched(true);
+
     try {
-      let url;
-      if (mode === "flight") {
-        if (!flightNum.trim()) throw new Error("Enter a flight number");
-        // → /api/flight/status?flight=UA123 → normalizeFlight(data.flights[0])
-        url = `/api/flight/status?flight=${encodeURIComponent(
-          flightNum.trim().toUpperCase()
-        )}`;
-      } else {
-        if (!origin.trim() || !dest.trim())
-          throw new Error("Enter both airports");
-        // → /api/flight/search?origin=LAX&dest=JFK → data.departures[]
-        url = `/api/flight/search?origin=${origin
-          .trim()
-          .toUpperCase()}&dest=${dest.trim().toUpperCase()}`;
+      if (!origin.trim()) {
+        throw new Error("Enter airport code (e.g. KTM, JFK)");
       }
 
-      const res = await fetch(url, { signal: AbortSignal.timeout(12000) });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const url = `/api/flight/departures?airport=${origin
+        .trim()
+        .toUpperCase()}`;
+
+      const res = await fetch(url, {
+        signal: AbortSignal.timeout(12000),
+      });
+
       const json = await res.json();
 
-      // Normalize: single flight or array
-      if (Array.isArray(json)) {
-        setResults(json.slice(0, 10));
-      } else if (json.departures) {
-        setResults(json.departures.slice(0, 10));
-      } else if (json.flights) {
-        setResults(json.flights.slice(0, 10));
-      } else {
-        setResults([json]);
+      if (!res.ok) {
+        throw new Error(json.error || "Failed request");
       }
+
+      // FlightAware returns: { departures: [...] }
+      setResults(json.departures || []);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -514,46 +641,12 @@ export default function FlightStatusLookup() {
               letterSpacing: "-0.01em",
             }}
           >
-            Flight Status Lookup
+            Airport Departures
           </span>
         </div>
         <p style={{ margin: 0, fontSize: 12, color: "rgba(255,255,255,0.35)" }}>
-          FlightAware AeroAPI · aeroapi.flightaware.com
+          FlightAware AeroAPI · Real-time departure board
         </p>
-      </div>
-
-      {/* ── Mode toggle ── */}
-      <div style={{ padding: "14px 24px 0", display: "flex", gap: 6 }}>
-        {[
-          { id: "flight", icon: "✈", label: "Flight #" },
-          { id: "route", icon: "🗺", label: "Route" },
-        ].map((m) => (
-          <button
-            key={m.id}
-            onClick={() => setMode(m.id)}
-            style={{
-              padding: "7px 16px",
-              borderRadius: 8,
-              cursor: "pointer",
-              fontSize: 12,
-              fontWeight: 600,
-              letterSpacing: "0.04em",
-              background:
-                mode === m.id
-                  ? "rgba(56,182,255,0.15)"
-                  : "rgba(255,255,255,0.04)",
-              color: mode === m.id ? "#38b6ff" : "rgba(255,255,255,0.4)",
-              border: `1px solid ${
-                mode === m.id
-                  ? "rgba(56,182,255,0.3)"
-                  : "rgba(255,255,255,0.07)"
-              }`,
-              transition: "all 0.15s",
-            }}
-          >
-            {m.icon} {m.label}
-          </button>
-        ))}
       </div>
 
       {/* ── Search form ── */}
@@ -572,86 +665,27 @@ export default function FlightStatusLookup() {
             flexWrap: "wrap",
           }}
         >
-          {mode === "flight" ? (
-            <input
-              type="text"
-              placeholder="Flight number (UA123, AA456…)"
-              value={flightNum}
-              onChange={(e) => setFlightNum(e.target.value.toUpperCase())}
-              style={{
-                flex: 1,
-                minWidth: 180,
-                padding: "10px 14px",
-                background: "rgba(255,255,255,0.05)",
-                border: "1px solid rgba(255,255,255,0.1)",
-                borderRadius: 9,
-                color: "#fff",
-                fontSize: 14,
-                fontFamily: "'JetBrains Mono', monospace",
-                fontWeight: 600,
-                letterSpacing: "0.06em",
-                textTransform: "uppercase",
-                outline: "none",
-              }}
-            />
-          ) : (
-            <>
-              <input
-                type="text"
-                placeholder="FROM"
-                maxLength={3}
-                value={origin}
-                onChange={(e) => setOrigin(e.target.value.toUpperCase())}
-                style={{
-                  width: 80,
-                  padding: "10px 12px",
-                  background: "rgba(255,255,255,0.05)",
-                  border: "1px solid rgba(255,255,255,0.1)",
-                  borderRadius: 9,
-                  color: "#fff",
-                  fontSize: 15,
-                  fontFamily: "monospace",
-                  fontWeight: 700,
-                  letterSpacing: "0.1em",
-                  textAlign: "center",
-                  textTransform: "uppercase",
-                  outline: "none",
-                }}
-              />
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="rgba(255,255,255,0.3)"
-                strokeWidth="2"
-              >
-                <path d="M5 12h14M12 5l7 7-7 7" />
-              </svg>
-              <input
-                type="text"
-                placeholder="TO"
-                maxLength={3}
-                value={dest}
-                onChange={(e) => setDest(e.target.value.toUpperCase())}
-                style={{
-                  width: 80,
-                  padding: "10px 12px",
-                  background: "rgba(255,255,255,0.05)",
-                  border: "1px solid rgba(255,255,255,0.1)",
-                  borderRadius: 9,
-                  color: "#fff",
-                  fontSize: 15,
-                  fontFamily: "monospace",
-                  fontWeight: 700,
-                  letterSpacing: "0.1em",
-                  textAlign: "center",
-                  textTransform: "uppercase",
-                  outline: "none",
-                }}
-              />
-            </>
-          )}
+          <input
+            type="text"
+            placeholder="Airport (KTM, JFK, LAX...)"
+            value={origin}
+            onChange={(e) => setOrigin(e.target.value.toUpperCase())}
+            style={{
+              flex: 1,
+              minWidth: 180,
+              padding: "10px 14px",
+              background: "rgba(255,255,255,0.05)",
+              border: "1px solid rgba(255,255,255,0.1)",
+              borderRadius: 9,
+              color: "#fff",
+              fontSize: 14,
+              fontFamily: "'JetBrains Mono', monospace",
+              fontWeight: 600,
+              letterSpacing: "0.06em",
+              textTransform: "uppercase",
+              outline: "none",
+            }}
+          />
           <button
             type="submit"
             disabled={loading}
@@ -741,7 +775,7 @@ export default function FlightStatusLookup() {
               fontSize: 13,
             }}
           >
-            No flights found. Check the flight number and try again.
+            No departing flights found. Check the airport code and try again.
           </div>
         )}
 
@@ -779,7 +813,7 @@ export default function FlightStatusLookup() {
                 fontSize: 13,
               }}
             >
-              Enter a flight number or route to check live status
+              Enter an airport code to see all departing flights
             </p>
           </div>
         )}
@@ -787,7 +821,7 @@ export default function FlightStatusLookup() {
         {!loading && flights.length > 0 && (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {flights.map((f, i) => (
-              <FlightCard key={i} flight={f} index={i} />
+              <FlightCard key={f.fa_flight_id || i} flight={f} index={i} />
             ))}
           </div>
         )}

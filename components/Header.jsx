@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import { Shield, Menu, X } from "lucide-react";
 
 const navItems = [
-  { label: "Workflow", href: "#workflow" },
+  { label: "Workflow", href: "/#workflow" },
   { label: "Dashboard", href: "/dashboard" },
   { label: "Infrastructure", href: "#infrastructure" },
   { label: "Comparison", href: "#comparison" },

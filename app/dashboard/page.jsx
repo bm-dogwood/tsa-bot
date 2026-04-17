@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * TSABotDashboard — Main page component
+ * TSABotDashboard — Main page component (Light Theme)
  *
  * Drop into: app/page.jsx  OR  app/dashboard/page.jsx
  *
@@ -15,7 +15,7 @@
  */
 
 import { useState, useEffect } from "react";
-
+import Header from "../../components/Header";
 import AirportDelayTracker from "../../components/AirportDelayTracker";
 import TSAWaitTimes from "../../components/TsaWaittimes";
 import FlightStatusLookup from "../../components/FlightStatusLookup";
@@ -38,8 +38,14 @@ function LiveTicker() {
         gap: 16,
         fontSize: 11,
         letterSpacing: "0.08em",
-        color: "rgba(255,255,255,0.3)",
+        color: "#64748b",
         fontFamily: "monospace",
+        backdropFilter: "blur(10px)",
+        backgroundColor: "rgba(255, 255, 255, 0.7)",
+        padding: "6px 16px",
+        borderRadius: 30,
+        border: "1px solid rgba(37, 99, 235, 0.15)",
+        boxShadow: "0 2px 8px rgba(0, 0, 0, 0.04)",
       }}
     >
       <span
@@ -47,20 +53,20 @@ function LiveTicker() {
           display: "flex",
           alignItems: "center",
           gap: 5,
-          color: "#2ed573",
+          color: "#10b981",
         }}
       >
         <span
           style={{
-            width: 5,
-            height: 5,
+            width: 6,
+            height: 6,
             borderRadius: "50%",
-            background: "#2ed573",
-            boxShadow: "0 0 6px #2ed573",
+            backgroundColor: "#10b981",
+            boxShadow: "0 0 8px #10b981",
             animation: "tick-pulse 2s ease-in-out infinite",
           }}
         />
-        <style>{`@keyframes tick-pulse{0%,100%{opacity:1}50%{opacity:0.4}}`}</style>
+        <style>{`@keyframes tick-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.4;transform:scale(1.2)}}`}</style>
         LIVE
       </span>
       <span>{time.toLocaleTimeString("en-US", { hour12: false })}</span>
@@ -95,25 +101,7 @@ const TABS = [
       </svg>
     ),
   },
-  {
-    id: "waittimes",
-    label: "Wait Times",
-    icon: (
-      <svg
-        width="14"
-        height="14"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      >
-        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-        <circle cx="9" cy="7" r="4" />
-        <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
-      </svg>
-    ),
-  },
+
   {
     id: "flights",
     label: "Flights",
@@ -155,245 +143,392 @@ const TABS = [
 
 export default function TSABotDashboard() {
   const [activeTab, setActiveTab] = useState("delays");
+  const [scrollY, setScrollY] = useState(0);
+
+  useEffect(() => {
+    const handleScroll = () => setScrollY(window.scrollY);
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        background: "#060b16",
-        fontFamily: "'DM Sans', 'Segoe UI', sans-serif",
-      }}
-    >
-      {/* ── Subtle grid background ── */}
+    <>
+      <Header />
       <div
         style={{
-          position: "fixed",
-          inset: 0,
-          pointerEvents: "none",
-          backgroundImage: `
-          linear-gradient(rgba(56,182,255,0.025) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(56,182,255,0.025) 1px, transparent 1px)
-        `,
-          backgroundSize: "40px 40px",
-          zIndex: 0,
-        }}
-      />
-
-      <div
-        style={{
+          minHeight: "100vh",
+          backgroundColor: "#f8fafc",
+          fontFamily: "'DM Sans', 'Segoe UI', sans-serif",
           position: "relative",
-          zIndex: 1,
-          maxWidth: 900,
-          margin: "0 auto",
-          padding: "24px 20px 60px",
+          paddingTop: "100px",
         }}
       >
-        {/* ── Site header ── */}
-        <header style={{ marginBottom: 32 }}>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "flex-start",
-              justifyContent: "space-between",
-              flexWrap: "wrap",
-              gap: 12,
-            }}
-          >
-            <div>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 12,
-                  marginBottom: 6,
-                }}
-              >
-                {/* Logo mark */}
-                <div
-                  style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: 10,
-                    background:
-                      "linear-gradient(135deg, rgba(56,182,255,0.25), rgba(56,182,255,0.08))",
-                    border: "1px solid rgba(56,182,255,0.25)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    boxShadow: "0 0 20px rgba(56,182,255,0.15)",
-                  }}
-                >
-                  <svg
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="#38b6ff"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                  >
-                    <path d="M17.8 19.2 16 11l3.5-3.5C21 6 21 4 19 4c-2 0-4 2-4 2l-8.5-1.5-3.5 3.5L11 9.5" />
-                    <path d="m5 19 1.5-1.5" />
-                  </svg>
-                </div>
-                <div>
-                  <h1
-                    style={{
-                      margin: 0,
-                      fontSize: 26,
-                      fontWeight: 800,
-                      color: "#fff",
-                      letterSpacing: "-0.03em",
-                      lineHeight: 1,
-                    }}
-                  >
-                    TSA
-                    <span style={{ color: "#38b6ff" }}>.BOT</span>
-                  </h1>
-                  <p
-                    style={{
-                      margin: 0,
-                      fontSize: 12,
-                      color: "rgba(255,255,255,0.3)",
-                      letterSpacing: "0.04em",
-                    }}
-                  >
-                    Real-time airport intelligence
-                  </p>
-                </div>
-              </div>
-            </div>
-            <LiveTicker />
-          </div>
+        {/* ── Animated gradient background with image overlay ── */}
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            pointerEvents: "none",
+            zIndex: 0,
+            backgroundImage: `
+         
+              url('https://images.unsplash.com/photo-1436491865332-7a61a109cc05?q=80&w=2074&auto=format&fit=crop')
+            `,
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+            backgroundAttachment: "fixed",
+            backgroundRepeat: "no-repeat",
+            transform: `translateY(${scrollY * 0.1}px)`,
+            transition: "transform 0.1s ease-out",
+          }}
+        />
 
-          {/* Divider */}
+        {/* ── Animated particles ── */}
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            pointerEvents: "none",
+            zIndex: 1,
+            overflow: "hidden",
+          }}
+        >
+          <style>{`
+          @keyframes float-particle-1 {
+            0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.15; }
+            33% { transform: translate(30px, -20px) scale(1.2); opacity: 0.3; }
+            66% { transform: translate(-20px, 15px) scale(0.9); opacity: 0.2; }
+          }
+          @keyframes float-particle-2 {
+            0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.1; }
+            50% { transform: translate(-40px, 25px) scale(1.1); opacity: 0.25; }
+          }
+          @keyframes float-particle-3 {
+            0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.08; }
+            25% { transform: translate(25px, -30px) scale(1.3); opacity: 0.2; }
+            75% { transform: translate(-35px, 20px) scale(0.85); opacity: 0.12; }
+          }
+        `}</style>
           <div
             style={{
-              marginTop: 20,
-              height: 1,
-              background:
-                "linear-gradient(90deg, rgba(56,182,255,0.3), transparent)",
+              position: "absolute",
+              top: "10%",
+              right: "5%",
+              width: 200,
+              height: 200,
+              backgroundImage:
+                "radial-gradient(circle, rgba(37, 99, 235, 0.06) 0%, transparent 70%)",
+              borderRadius: "50%",
+              animation: "float-particle-1 20s ease-in-out infinite",
             }}
           />
-        </header>
-
-        {/* ── Tab navigation ── */}
-        <nav
-          style={{
-            display: "flex",
-            gap: 4,
-            marginBottom: 20,
-            background: "rgba(255,255,255,0.03)",
-            border: "1px solid rgba(255,255,255,0.07)",
-            borderRadius: 12,
-            padding: 4,
-          }}
-        >
-          {TABS.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              style={{
-                flex: 1,
-                padding: "9px 12px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 6,
-                background:
-                  activeTab === tab.id
-                    ? "rgba(56,182,255,0.12)"
-                    : "transparent",
-                border:
-                  activeTab === tab.id
-                    ? "1px solid rgba(56,182,255,0.2)"
-                    : "1px solid transparent",
-                borderRadius: 9,
-                cursor: "pointer",
-                fontSize: 12,
-                fontWeight: 600,
-                letterSpacing: "0.04em",
-                color:
-                  activeTab === tab.id ? "#38b6ff" : "rgba(255,255,255,0.35)",
-                transition: "all 0.15s",
-              }}
-            >
-              <span style={{ color: "inherit", display: "flex" }}>
-                {tab.icon}
-              </span>
-              <span>{tab.label}</span>
-            </button>
-          ))}
-        </nav>
-
-        {/* ── Active panel ── */}
-        <div key={activeTab} style={{ animation: "tab-fade-in 0.2s ease" }}>
-          <style>{`@keyframes tab-fade-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}`}</style>
-          {activeTab === "delays" && <AirportDelayTracker />}
-          {activeTab === "waittimes" && <TSAWaitTimes />}
-          {activeTab === "flights" && <FlightStatusLookup />}
-          {activeTab === "alerts" && <TSAAlerts />}
-        </div>
-
-        {/* ── Footer sources ── */}
-        <footer
-          style={{
-            marginTop: 32,
-            paddingTop: 20,
-            borderTop: "1px solid rgba(255,255,255,0.06)",
-          }}
-        >
           <div
             style={{
-              display: "flex",
-              gap: 16,
-              flexWrap: "wrap",
-              justifyContent: "center",
+              position: "absolute",
+              bottom: "20%",
+              left: "3%",
+              width: 300,
+              height: 300,
+              backgroundImage:
+                "radial-gradient(circle, rgba(16, 185, 129, 0.04) 0%, transparent 70%)",
+              borderRadius: "50%",
+              animation: "float-particle-2 25s ease-in-out infinite",
             }}
-          >
-            {[
-              { label: "FAA ATCSCC", href: "https://nasstatus.faa.gov" },
-              { label: "TSA MyTSA", href: "https://apps.tsa.dhs.gov/mytsa" },
-              { label: "FlightAware", href: "https://flightaware.com/aeroapi" },
-              { label: "TSA.gov", href: "https://www.tsa.gov" },
-            ].map((s) => (
-              <a
-                key={s.label}
-                href={s.href}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  fontSize: 11,
-                  color: "rgba(255,255,255,0.2)",
-                  textDecoration: "none",
-                  letterSpacing: "0.04em",
-                  transition: "color 0.15s",
-                }}
-                onMouseEnter={(e) =>
-                  (e.target.style.color = "rgba(255,255,255,0.5)")
-                }
-                onMouseLeave={(e) =>
-                  (e.target.style.color = "rgba(255,255,255,0.2)")
-                }
-              >
-                {s.label} ↗
-              </a>
-            ))}
-          </div>
-          <p
+          />
+          <div
             style={{
-              textAlign: "center",
-              margin: "10px 0 0",
-              fontSize: 10,
-              color: "rgba(255,255,255,0.12)",
-              letterSpacing: "0.04em",
+              position: "absolute",
+              top: "40%",
+              left: "15%",
+              width: 150,
+              height: 150,
+              backgroundImage:
+                "radial-gradient(circle, rgba(37, 99, 235, 0.04) 0%, transparent 70%)",
+              borderRadius: "50%",
+              animation: "float-particle-3 18s ease-in-out infinite",
+            }}
+          />
+        </div>
+
+        <div
+          style={{
+            position: "relative",
+            zIndex: 2,
+            maxWidth: 900,
+            margin: "0 auto",
+            padding: "24px 20px 60px",
+          }}
+        >
+          {/* ── Site header ── */}
+          <header style={{ marginBottom: 32 }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "flex-start",
+                justifyContent: "space-between",
+                flexWrap: "wrap",
+                gap: 12,
+              }}
+            >
+              <div>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 12,
+                    marginBottom: 6,
+                  }}
+                >
+                  {/* Logo mark with glow effect */}
+                  <div
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 12,
+                      backgroundImage:
+                        "linear-gradient(135deg, rgba(37, 99, 235, 0.15), rgba(37, 99, 235, 0.05))",
+                      border: "1px solid rgba(37, 99, 235, 0.2)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      boxShadow: "0 0 30px rgba(37, 99, 235, 0.1)",
+                      backdropFilter: "blur(10px)",
+                      animation: "glow-pulse 3s ease-in-out infinite",
+                    }}
+                  >
+                    <style>{`
+                    @keyframes glow-pulse {
+                      0%, 100% { boxShadow: 0 0 30px rgba(37, 99, 235, 0.1); }
+                      50% { boxShadow: 0 0 50px rgba(37, 99, 235, 0.2); }
+                    }
+                  `}</style>
+                    <svg
+                      width="20"
+                      height="20"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="#2563eb"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                    >
+                      <path d="M17.8 19.2 16 11l3.5-3.5C21 6 21 4 19 4c-2 0-4 2-4 2l-8.5-1.5-3.5 3.5L11 9.5" />
+                      <path d="m5 19 1.5-1.5" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h1
+                      style={{
+                        margin: 0,
+                        fontSize: 28,
+                        fontWeight: 800,
+                        color: "#0f172a",
+                        letterSpacing: "-0.03em",
+                        lineHeight: 1,
+                      }}
+                    >
+                      TSA
+                      <span style={{ color: "#2563eb" }}>.BOT</span>
+                    </h1>
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: 12,
+                        color: "#64748b",
+                        letterSpacing: "0.04em",
+                      }}
+                    >
+                      Real-time airport intelligence
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <LiveTicker />
+            </div>
+
+            {/* Divider */}
+            <div
+              style={{
+                marginTop: 20,
+                height: 1,
+                backgroundImage:
+                  "linear-gradient(90deg, rgba(37, 99, 235, 0.3), rgba(37, 99, 235, 0.1), transparent)",
+              }}
+            />
+          </header>
+
+          {/* ── Tab navigation ── */}
+          <nav
+            style={{
+              display: "flex",
+              gap: 4,
+              marginBottom: 20,
+              backgroundColor: "rgba(255, 255, 255, 0.8)",
+              backdropFilter: "blur(20px)",
+              border: "1px solid rgba(37, 99, 235, 0.1)",
+              borderRadius: 14,
+              padding: 4,
+              boxShadow: "0 4px 12px rgba(0, 0, 0, 0.04)",
             }}
           >
-            Data sourced from public APIs and official government feeds. Updated
-            in real time.
-          </p>
-        </footer>
+            {TABS.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                style={{
+                  flex: 1,
+                  padding: "10px 12px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 6,
+                  backgroundImage:
+                    activeTab === tab.id
+                      ? "linear-gradient(135deg, rgba(37, 99, 235, 0.08), rgba(37, 99, 235, 0.04))"
+                      : "none",
+                  backgroundColor: "transparent",
+                  border:
+                    activeTab === tab.id
+                      ? "1px solid rgba(37, 99, 235, 0.2)"
+                      : "1px solid transparent",
+                  borderRadius: 10,
+                  cursor: "pointer",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  letterSpacing: "0.04em",
+                  color: activeTab === tab.id ? "#2563eb" : "#64748b",
+                  transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+                  backdropFilter: activeTab === tab.id ? "blur(10px)" : "none",
+                  boxShadow:
+                    activeTab === tab.id
+                      ? "0 2px 8px rgba(37, 99, 235, 0.08)"
+                      : "none",
+                }}
+                onMouseEnter={(e) => {
+                  if (activeTab !== tab.id) {
+                    e.target.style.backgroundImage = "none";
+                    e.target.style.backgroundColor = "rgba(37, 99, 235, 0.04)";
+                    e.target.style.color = "#475569";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (activeTab !== tab.id) {
+                    e.target.style.backgroundColor = "transparent";
+                    e.target.style.color = "#64748b";
+                  }
+                }}
+              >
+                <span style={{ color: "inherit", display: "flex" }}>
+                  {tab.icon}
+                </span>
+                <span>{tab.label}</span>
+              </button>
+            ))}
+          </nav>
+
+          {/* ── Active panel ── */}
+          <div
+            key={activeTab}
+            style={{
+              animation: "tab-fade-in 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+              backgroundColor: "rgba(255, 255, 255, 0.7)",
+              backdropFilter: "blur(20px)",
+              borderRadius: 16,
+              border: "1px solid rgba(37, 99, 235, 0.1)",
+              padding: "20px",
+              boxShadow: "0 4px 16px rgba(0, 0, 0, 0.04)",
+            }}
+          >
+            <style>{`
+            @keyframes tab-fade-in {
+              from {
+                opacity: 0;
+                transform: translateY(10px);
+              }
+              to {
+                opacity: 1;
+                transform: translateY(0);
+              }
+            }
+          `}</style>
+            {activeTab === "delays" && <AirportDelayTracker />}
+            {activeTab === "waittimes" && <TSAWaitTimes />}
+            {activeTab === "flights" && <FlightStatusLookup />}
+            {activeTab === "alerts" && <TSAAlerts />}
+          </div>
+
+          {/* ── Footer sources ── */}
+          <footer
+            style={{
+              marginTop: 32,
+              paddingTop: 20,
+              borderTop: "1px solid rgba(37, 99, 235, 0.1)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                gap: 20,
+                flexWrap: "wrap",
+                justifyContent: "center",
+              }}
+            >
+              {[
+                { label: "FAA ATCSCC", href: "https://nasstatus.faa.gov" },
+                { label: "TSA MyTSA", href: "https://apps.tsa.dhs.gov/mytsa" },
+                {
+                  label: "FlightAware",
+                  href: "https://flightaware.com/aeroapi",
+                },
+                { label: "TSA.gov", href: "https://www.tsa.gov" },
+              ].map((s) => (
+                <a
+                  key={s.label}
+                  href={s.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    fontSize: 11,
+                    color: "#94a3b8",
+                    textDecoration: "none",
+                    letterSpacing: "0.04em",
+                    transition: "all 0.2s",
+                    padding: "4px 8px",
+                    borderRadius: 6,
+                    backgroundColor: "rgba(37, 99, 235, 0.02)",
+                    border: "1px solid rgba(37, 99, 235, 0.05)",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.target.style.color = "#2563eb";
+                    e.target.style.backgroundColor = "rgba(37, 99, 235, 0.06)";
+                    e.target.style.borderColor = "rgba(37, 99, 235, 0.15)";
+                    e.target.style.transform = "translateY(-2px)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.target.style.color = "#94a3b8";
+                    e.target.style.backgroundColor = "rgba(37, 99, 235, 0.02)";
+                    e.target.style.borderColor = "rgba(37, 99, 235, 0.05)";
+                    e.target.style.transform = "translateY(0)";
+                  }}
+                >
+                  {s.label} ↗
+                </a>
+              ))}
+            </div>
+            <p
+              style={{
+                textAlign: "center",
+                margin: "14px 0 0",
+                fontSize: 10,
+                color: "#cbd5e1",
+                letterSpacing: "0.04em",
+              }}
+            >
+              Data sourced from public APIs and official government feeds.
+              Updated in real time.
+            </p>
+          </footer>
+        </div>
       </div>
-    </div>
+    </>
   );
 }

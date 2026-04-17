@@ -122,7 +122,6 @@ export default function InteractiveScanDemo() {
           className="text-center mb-16"
         >
           <span className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-full bg-yellow-50 text-yellow-700 border border-yellow-200">
-            <Zap className="w-4 h-4" />
             Interactive Demonstration
           </span>
 
