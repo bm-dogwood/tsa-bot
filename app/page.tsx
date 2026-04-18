@@ -1,5 +1,5 @@
-import Preview from "@/app/preview/page";
+import Dashboard from "@/app/dashboard/page";
 
 export default function Home() {
-  return <Preview />;
+  return <Dashboard />;
 }

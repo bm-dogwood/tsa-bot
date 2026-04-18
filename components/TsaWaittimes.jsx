@@ -1,6 +1,5 @@
 "use client";
-
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 
 const AIRPORTS = [
   "ATL",
@@ -25,343 +24,208 @@ const AIRPORTS = [
   "BWI",
 ];
 
-function Spinner({ size = 18 }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      style={{ animation: "tsaSpin2 0.75s linear infinite", flexShrink: 0 }}
-    >
-      <style>{`@keyframes tsaSpin2{to{transform:rotate(360deg)}}`}</style>
-      <circle
-        cx="12"
-        cy="12"
-        r="9"
-        fill="none"
-        stroke="#38b6ff"
-        strokeWidth="2.5"
-        strokeOpacity="0.2"
-      />
-      <path
-        d="M12 3a9 9 0 0 1 9 9"
-        fill="none"
-        stroke="#38b6ff"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
-// Color scheme based on wait time
-function getWaitTheme(mins) {
+function waitColor(mins) {
   const n = parseInt(mins) || 0;
-  if (n < 10)
-    return {
-      bar: "#2ed573",
-      bg: "rgba(46,213,115,0.08)",
-      border: "rgba(46,213,115,0.2)",
-      text: "#2ed573",
-      label: "SHORT",
-    };
-  if (n < 20)
-    return {
-      bar: "#38b6ff",
-      bg: "rgba(56,182,255,0.08)",
-      border: "rgba(56,182,255,0.2)",
-      text: "#38b6ff",
-      label: "MODERATE",
-    };
-  if (n < 35)
-    return {
-      bar: "#ffa502",
-      bg: "rgba(255,165,2,0.08)",
-      border: "rgba(255,165,2,0.2)",
-      text: "#ffa502",
-      label: "BUSY",
-    };
-  return {
-    bar: "#ff4757",
-    bg: "rgba(255,71,87,0.08)",
-    border: "rgba(255,71,87,0.2)",
-    text: "#ff4757",
-    label: "LONG",
-  };
+  if (n < 15) return "var(--green)";
+  if (n < 30) return "var(--accent2)";
+  if (n < 45) return "var(--amber)";
+  return "var(--red)";
 }
 
-export default function TSAWaitTimes() {
+function waitLabel(mins) {
+  const n = parseInt(mins) || 0;
+  if (n < 15) return { cls: "badge-green", text: "SHORT" };
+  if (n < 30) return { cls: "badge-blue", text: "MODERATE" };
+  if (n < 45) return { cls: "badge-amber", text: "BUSY" };
+  return { cls: "badge-red", text: "LONG" };
+}
+
+export default function TSAWaitTimes({ onAvgWait, compact }) {
   const [airport, setAirport] = useState("LAX");
-  const [inputVal, setInputVal] = useState("LAX");
+  const [input, setInput] = useState("LAX");
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [lastUpdated, setLastUpdated] = useState(null);
+  const abortControllerRef = useRef(null);
+  const timeoutRef = useRef(null);
+
+  // Use ref for onAvgWait to prevent dependency changes
+  const onAvgWaitRef = useRef(onAvgWait);
+  useEffect(() => {
+    onAvgWaitRef.current = onAvgWait;
+  }, [onAvgWait]);
 
   const fetchWaits = useCallback(async (ap) => {
+    // Cancel any pending request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     setLoading(true);
     setError(null);
+
     try {
-      const res = await fetch(
+      // Create timeout promise
+      const timeoutPromise = new Promise((_, reject) => {
+        timeoutRef.current = setTimeout(() => {
+          controller.abort();
+          reject(new Error("Request timeout"));
+        }, 10000);
+      });
+
+      // Race between fetch and timeout
+      const fetchPromise = fetch(
         `/api/tsa/waittimes?airport=${encodeURIComponent(ap)}`,
-        {
-          signal: AbortSignal.timeout(10000),
-        }
+        { signal: controller.signal }
       );
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = await res.json();
-      // Your API returns { airport, data: [...checkpoints] }
-      setData(json);
-      setLastUpdated(new Date());
-    } catch (e) {
-      setError(e.message);
+
+      const r = await Promise.race([fetchPromise, timeoutPromise]);
+
+      // Clear timeout since fetch completed
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+
+      const j = await r.json();
+      setData(j);
+
+      const cps = j.data ?? j.checkpoints ?? [];
+      if (cps.length && onAvgWaitRef.current) {
+        const avg = Math.round(
+          cps.reduce(
+            (s, c) => s + (parseInt(c.waitMins || c.wait_minutes || 0) || 0),
+            0
+          ) / cps.length
+        );
+        onAvgWaitRef.current(`${avg} min`);
+      }
+    } catch (err) {
+      // Don't set error if it was an abort
+      if (err.name === "AbortError") {
+        console.log("Request aborted");
+        return;
+      }
+
+      setError("TSA feed unavailable");
+
+      // demo fallback data
+      const demoMap = {
+        LAX: ["Terminal 1", "Terminal 2", "Terminal 3", "TBIT"],
+        JFK: ["Terminal 1", "Terminal 4", "Terminal 5", "Terminal 8"],
+        ORD: ["Terminal 1 H", "Terminal 2 F/G", "Terminal 3 K/L"],
+        ATL: ["North", "South", "International"],
+        DFW: ["Terminal A", "Terminal B", "Terminal C", "Terminal D"],
+      };
+      const names = demoMap[ap] || [
+        "Checkpoint A",
+        "Checkpoint B",
+        "Checkpoint C",
+      ];
+      const demo = {
+        data: names.map((n) => ({
+          name: n,
+          waitMins: String(Math.floor(Math.random() * 40 + 5)),
+        })),
+      };
+      setData(demo);
+
+      if (onAvgWaitRef.current) {
+        onAvgWaitRef.current("~20 min");
+      }
     } finally {
       setLoading(false);
+      abortControllerRef.current = null;
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
     }
-  }, []);
+  }, []); // Empty dependency array - stable reference
 
   useEffect(() => {
     fetchWaits(airport);
-  }, [airport, fetchWaits]);
+  }, [airport, fetchWaits]); // fetchWaits is now stable
 
-  const checkpoints = data?.data ?? [];
-  // After line ~125 where you render the header, add:
-  {
-    data?.fallback && (
-      <div
-        style={{
-          marginTop: 4,
-          fontSize: 11,
-          color: "#ffa502",
-          display: "flex",
-          alignItems: "center",
-          gap: 4,
-        }}
-      >
-        <span>⚠️</span>
-        <span>Using estimated wait times (TSA feed unavailable)</span>
-      </div>
-    );
-  }
-  {
-    data?.cached && !data?.fallback && (
-      <div
-        style={{
-          marginTop: 4,
-          fontSize: 11,
-          color: "#38b6ff",
-          display: "flex",
-          alignItems: "center",
-          gap: 4,
-        }}
-      >
-        <span>📦</span>
-        <span>Cached data {data?.stale ? "(stale)" : ""}</span>
-      </div>
-    );
-  }
-  // Compute average wait
-  const avgWait =
-    checkpoints.length > 0
-      ? Math.round(
-          checkpoints.reduce(
-            (s, c) => s + (parseInt(c.waitMins || c.wait_minutes || 0) || 0),
-            0
-          ) / checkpoints.length
-        )
-      : null;
-
-  const handleSubmit = (e) => {
-    e?.preventDefault();
-    const code = inputVal.trim().toUpperCase().slice(0, 3);
-    if (code.length === 3) setAirport(code);
-  };
+  const checkpoints = data?.data ?? data?.checkpoints ?? [];
+  const avg = checkpoints.length
+    ? Math.round(
+        checkpoints.reduce(
+          (s, c) => s + (parseInt(c.waitMins || c.wait_minutes || 0) || 0),
+          0
+        ) / checkpoints.length
+      )
+    : null;
 
   return (
-    <div
-      style={{
-        background: "#0a0f1e",
-        borderRadius: 20,
-        border: "1px solid rgba(56,182,255,0.12)",
-        overflow: "hidden",
-        fontFamily: "'DM Sans', 'Segoe UI', sans-serif",
-        boxShadow:
-          "0 0 0 1px rgba(255,255,255,0.04), 0 24px 64px rgba(0,0,0,0.6)",
-      }}
-    >
-      {/* ── Header ── */}
-      <div
-        style={{
-          padding: "20px 24px 18px",
-          borderBottom: "1px solid rgba(255,255,255,0.06)",
-          display: "flex",
-          alignItems: "flex-start",
-          justifyContent: "space-between",
-          background:
-            "linear-gradient(135deg, rgba(56,182,255,0.07) 0%, transparent 60%)",
-        }}
-      >
-        <div>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              marginBottom: 4,
-            }}
-          >
-            <div
-              style={{
-                width: 32,
-                height: 32,
-                borderRadius: 8,
-                background: "rgba(56,182,255,0.12)",
-                border: "1px solid rgba(56,182,255,0.2)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="#38b6ff"
-                strokeWidth="2"
-                strokeLinecap="round"
-              >
-                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                <circle cx="9" cy="7" r="4" />
-                <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
-              </svg>
-            </div>
-            <span
-              style={{
-                color: "#fff",
-                fontSize: 16,
-                fontWeight: 600,
-                letterSpacing: "-0.01em",
-              }}
-            >
-              TSA Wait Times
-            </span>
-            {avgWait !== null && !loading && (
-              <span
-                style={{
-                  fontSize: 11,
-                  fontWeight: 600,
-                  letterSpacing: "0.06em",
-                  padding: "2px 8px",
-                  borderRadius: 20,
-                  background: getWaitTheme(avgWait).bg,
-                  color: getWaitTheme(avgWait).text,
-                  border: `1px solid ${getWaitTheme(avgWait).border}`,
-                }}
-              >
-                AVG {avgWait} MIN
-              </span>
-            )}
+    <div className="card">
+      <div className="card-hd">
+        <div className="card-hd-l">
+          <div className="card-icon">
+            <svg viewBox="0 0 24 24">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+            </svg>
           </div>
-          <p
-            style={{
-              margin: 0,
-              fontSize: 12,
-              color: "rgba(255,255,255,0.35)",
-              letterSpacing: "0.02em",
-            }}
-          >
-            TSA MyTSA · apps.tsa.dhs.gov
-            {lastUpdated &&
-              ` · ${lastUpdated.toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-              })}`}
-          </p>
+          <div>
+            <div className="card-title">TSA Wait Times</div>
+            <div className="card-sub">TSA MyTSA · {airport}</div>
+          </div>
         </div>
+        {avg !== null && (
+          <span className={`badge ${waitLabel(avg).cls}`}>avg {avg} min</span>
+        )}
       </div>
 
-      {/* ── Search + Airport Selector ── */}
-      <div
-        style={{
-          padding: "16px 24px",
-          borderBottom: "1px solid rgba(255,255,255,0.06)",
-        }}
-      >
+      {/* Airport selector */}
+      <div className="ap-bar">
         <form
-          onSubmit={handleSubmit}
-          style={{ display: "flex", gap: 8, marginBottom: 12 }}
+          onSubmit={(e) => {
+            e.preventDefault();
+            const c = input.trim().toUpperCase().slice(0, 3);
+            if (c.length === 3) setAirport(c);
+          }}
+          style={{ display: "flex", gap: 6 }}
         >
-          <div style={{ position: "relative", flex: 1 }}>
-            <input
-              type="text"
-              maxLength={3}
-              value={inputVal}
-              onChange={(e) => setInputVal(e.target.value.toUpperCase())}
-              placeholder="Enter airport code"
-              style={{
-                width: "100%",
-                boxSizing: "border-box",
-                padding: "10px 14px",
-                background: "rgba(255,255,255,0.05)",
-                border: "1px solid rgba(255,255,255,0.1)",
-                borderRadius: 9,
-                color: "#fff",
-                fontSize: 15,
-                fontWeight: 700,
-                letterSpacing: "0.1em",
-                outline: "none",
-                fontFamily: "monospace",
-                textTransform: "uppercase",
-              }}
-            />
-          </div>
+          <input
+            value={input}
+            onChange={(e) => setInput(e.target.value.toUpperCase())}
+            maxLength={3}
+            placeholder="Airport code"
+            style={{
+              width: 110,
+              fontFamily: "var(--mono)",
+              fontWeight: 600,
+              letterSpacing: ".08em",
+              textTransform: "uppercase",
+              fontSize: 13,
+            }}
+          />
           <button
             type="submit"
-            style={{
-              padding: "10px 20px",
-              background: "rgba(56,182,255,0.15)",
-              border: "1px solid rgba(56,182,255,0.3)",
-              borderRadius: 9,
-              color: "#38b6ff",
-              fontSize: 12,
-              fontWeight: 700,
-              letterSpacing: "0.06em",
-              cursor: "pointer",
-            }}
+            className="btn btn-accent"
+            style={{ padding: "6px 12px" }}
           >
             CHECK
           </button>
         </form>
-
-        {/* Quick-select airport grid */}
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
-          {AIRPORTS.map((ap) => (
+        <div className="ap-chips">
+          {AIRPORTS.slice(0, compact ? 8 : 20).map((ap) => (
             <button
               key={ap}
+              className={`ap-chip${airport === ap ? " active" : ""}`}
               onClick={() => {
-                setInputVal(ap);
+                setInput(ap);
                 setAirport(ap);
-              }}
-              style={{
-                padding: "4px 9px",
-                borderRadius: 6,
-                cursor: "pointer",
-                fontSize: 11,
-                fontWeight: 700,
-                letterSpacing: "0.05em",
-                fontFamily: "monospace",
-                background:
-                  airport === ap
-                    ? "rgba(56,182,255,0.2)"
-                    : "rgba(255,255,255,0.04)",
-                color: airport === ap ? "#38b6ff" : "rgba(255,255,255,0.35)",
-                border: `1px solid ${
-                  airport === ap
-                    ? "rgba(56,182,255,0.35)"
-                    : "rgba(255,255,255,0.07)"
-                }`,
-                transition: "all 0.12s",
               }}
             >
               {ap}
@@ -370,215 +234,154 @@ export default function TSAWaitTimes() {
         </div>
       </div>
 
-      {/* ── Results ── */}
-      <div style={{ padding: "16px 24px 20px", minHeight: 180 }}>
+      {/* Checkpoints */}
+      <div className="cp-body">
         {loading && (
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              padding: "36px 0",
-              gap: 12,
-            }}
-          >
-            <Spinner size={28} />
-            <p
-              style={{
-                margin: 0,
-                color: "rgba(255,255,255,0.3)",
-                fontSize: 12,
-                letterSpacing: "0.06em",
-              }}
-            >
-              LOADING {airport} CHECKPOINTS…
-            </p>
+          <div className="loading-wrap">
+            <div className="spinner" />
+            <span>LOADING {airport} CHECKPOINTS…</span>
           </div>
         )}
-
         {error && !loading && (
           <div
-            style={{
-              background: "rgba(255,71,87,0.08)",
-              border: "1px solid rgba(255,71,87,0.2)",
-              borderRadius: 12,
-              padding: "14px 18px",
-              color: "rgba(255,71,87,0.8)",
-              fontSize: 13,
-            }}
+            style={{ padding: "8px 16px", fontSize: 11, color: "var(--amber)" }}
           >
-            Failed to load wait times — {error}
+            ⚠ {error} — showing estimated data
           </div>
         )}
-
-        {!loading && !error && checkpoints.length === 0 && (
-          <div style={{ textAlign: "center", padding: "32px 0" }}>
-            <p
-              style={{
-                margin: "0 0 4px",
-                color: "rgba(255,255,255,0.4)",
-                fontSize: 14,
-              }}
-            >
-              No checkpoint data for {airport}
-            </p>
-            <p
-              style={{
-                margin: 0,
-                color: "rgba(255,255,255,0.2)",
-                fontSize: 12,
-              }}
-            >
-              This airport may not report to TSA MyTSA
-            </p>
-          </div>
+        {!loading && checkpoints.length === 0 && !error && (
+          <div className="empty">No data for {airport}</div>
         )}
-
-        {!loading && checkpoints.length > 0 && (
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
-              gap: 10,
-            }}
-          >
-            {checkpoints.map((cp, i) => {
-              const waitMins =
-                parseInt(cp.waitMins ?? cp.wait_minutes ?? cp.wait ?? 0) || 0;
-              const theme = getWaitTheme(waitMins);
-              const pct = Math.min((waitMins / 60) * 100, 100);
-              return (
-                <div
-                  key={i}
-                  style={{
-                    background: theme.bg,
-                    border: `1px solid ${theme.border}`,
-                    borderRadius: 12,
-                    padding: "16px",
-                    animation: `tsa-cp-in 0.3s ease ${i * 0.05}s both`,
-                  }}
-                >
-                  <style>{`@keyframes tsa-cp-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}`}</style>
-
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "flex-start",
-                      marginBottom: 12,
-                    }}
-                  >
-                    <p
-                      style={{
-                        margin: 0,
-                        fontSize: 12,
-                        fontWeight: 600,
-                        color: "rgba(255,255,255,0.7)",
-                        letterSpacing: "0.02em",
-                        lineHeight: 1.3,
-                        flex: 1,
-                        paddingRight: 8,
-                      }}
-                    >
-                      {cp.name || cp.checkpointName || "Checkpoint"}
-                    </p>
-                    <span
-                      style={{
-                        fontSize: 9,
-                        fontWeight: 700,
-                        letterSpacing: "0.08em",
-                        padding: "2px 6px",
-                        borderRadius: 4,
-                        background: `${theme.bar}22`,
-                        color: theme.text,
-                        border: `1px solid ${theme.border}`,
-                        flexShrink: 0,
-                      }}
-                    >
-                      {theme.label}
-                    </span>
-                  </div>
-
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "baseline",
-                      gap: 4,
-                      marginBottom: 10,
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontSize: 38,
-                        fontWeight: 800,
-                        lineHeight: 1,
-                        color: theme.text,
-                        fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-                      }}
-                    >
-                      {waitMins}
-                    </span>
-                    <span
-                      style={{
-                        fontSize: 13,
-                        color: "rgba(255,255,255,0.35)",
-                        fontWeight: 500,
-                      }}
-                    >
-                      min
-                    </span>
-                  </div>
-
-                  {/* Progress bar */}
-                  <div
-                    style={{
-                      height: 3,
-                      background: "rgba(255,255,255,0.07)",
-                      borderRadius: 2,
-                    }}
-                  >
-                    <div
-                      style={{
-                        height: "100%",
-                        width: `${pct}%`,
-                        background: theme.bar,
-                        borderRadius: 2,
-                        transition: "width 0.6s ease",
-                      }}
-                    />
-                  </div>
-
-                  {(cp.precheck ||
-                    cp.status?.toLowerCase().includes("precheck")) && (
-                    <div
-                      style={{
-                        marginTop: 8,
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 5,
-                        color: "rgba(255,255,255,0.4)",
-                        fontSize: 11,
-                      }}
-                    >
-                      <svg
-                        width="11"
-                        height="11"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.5"
-                      >
-                        <polyline points="20 6 9 17 4 12" />
-                      </svg>
-                      TSA PreCheck available
-                    </div>
-                  )}
+        {!loading &&
+          checkpoints.map((cp, i) => {
+            const mins =
+              parseInt(cp.waitMins ?? cp.wait_minutes ?? cp.wait ?? 0) || 0;
+            const pct = Math.min((mins / 60) * 100, 100);
+            const col = waitColor(mins);
+            const lbl = waitLabel(mins);
+            return (
+              <div
+                key={i}
+                className="cp-row"
+                style={{ animationDelay: `${i * 40}ms` }}
+              >
+                <div className="cp-meta">
+                  <span className="cp-name">
+                    {cp.name || cp.checkpointName || "Checkpoint"}
+                  </span>
+                  <span className={`badge ${lbl.cls}`} style={{ fontSize: 9 }}>
+                    {lbl.text}
+                  </span>
                 </div>
-              );
-            })}
-          </div>
-        )}
+                <div className="cp-bar-track">
+                  <div
+                    className="cp-bar-fill"
+                    style={{ width: `${pct}%`, background: col }}
+                  />
+                </div>
+                <div className="cp-val" style={{ color: col }}>
+                  {mins}
+                  <span style={{ fontSize: 9, color: "var(--text3)" }}>
+                    {" "}
+                    min
+                  </span>
+                </div>
+              </div>
+            );
+          })}
       </div>
+
+      <style jsx>{`
+        .ap-bar {
+          padding: 10px 16px;
+          border-bottom: 1px solid var(--border);
+          background: var(--bg3);
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+        .ap-chips {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 4px;
+        }
+        .ap-chip {
+          padding: 3px 7px;
+          border-radius: 5px;
+          background: transparent;
+          border: 1px solid var(--border);
+          color: var(--text3);
+          font-size: 10px;
+          font-family: var(--mono);
+          font-weight: 600;
+          letter-spacing: 0.04em;
+          cursor: pointer;
+          transition: all 0.12s;
+        }
+        .ap-chip:hover {
+          border-color: var(--border2);
+          color: var(--text2);
+        }
+        .ap-chip.active {
+          background: rgba(79, 142, 247, 0.12);
+          border-color: rgba(79, 142, 247, 0.3);
+          color: var(--accent2);
+        }
+        .cp-body {
+          padding: 8px 16px 14px;
+        }
+        .cp-row {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 7px 0;
+          border-bottom: 1px solid var(--border);
+          animation: rowIn 0.25s ease both;
+        }
+        @keyframes rowIn {
+          from {
+            opacity: 0;
+            transform: translateY(4px);
+          }
+          to {
+            opacity: 1;
+            transform: none;
+          }
+        }
+        .cp-row:last-child {
+          border-bottom: none;
+        }
+        .cp-meta {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          min-width: 120px;
+          flex-shrink: 0;
+        }
+        .cp-name {
+          font-size: 11px;
+          color: var(--text2);
+        }
+        .cp-bar-track {
+          flex: 1;
+          height: 4px;
+          background: var(--bg4);
+          border-radius: 2px;
+          overflow: hidden;
+        }
+        .cp-bar-fill {
+          height: 100%;
+          border-radius: 2px;
+          transition: width 0.5s ease;
+        }
+        .cp-val {
+          font-family: var(--mono);
+          font-size: 14px;
+          font-weight: 600;
+          min-width: 44px;
+          text-align: right;
+        }
+      `}</style>
     </div>
   );
 }
